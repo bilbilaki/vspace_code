@@ -3,6 +3,7 @@ package com.vspace.code.termuxagent
 import com.google.gson.Gson
 import com.google.gson.JsonSyntaxException
 import java.io.File
+import java.io.IOException
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -11,6 +12,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import java.util.UUID
 
 data class WorkspaceDescriptor(
     val id: String,
@@ -111,38 +113,72 @@ class WorkspaceRepository(private val filesDir: File) {
         }
 
         val destination = File(destinationRoot, source.name)
+        val stagingRoot = createStagingDir(destinationRoot, "import")
+        val stagedEntity = File(stagingRoot, source.name)
 
-        when (mode) {
-            "file" -> {
-                if (!source.isFile) {
+        try {
+            when (mode) {
+                "file" -> if (!source.isFile) {
                     throw TermuxAgentException(
                         AgentErrorCode.VALIDATION,
                         "Import mode 'file' requires a file source",
                     )
                 }
-                copyEntity(source, destination, overwrite = true, skipExisting = false)
-            }
-            "folder" -> {
-                if (!source.isDirectory) {
+                "folder" -> if (!source.isDirectory) {
                     throw TermuxAgentException(
                         AgentErrorCode.VALIDATION,
                         "Import mode 'folder' requires a directory source",
                     )
                 }
-                copyEntity(source, destination, overwrite = true, skipExisting = false)
+                "merge", "overwrite", "skip-existing" -> Unit
+                else -> throw TermuxAgentException(
+                    AgentErrorCode.VALIDATION,
+                    "Unsupported import mode: $mode",
+                )
             }
-            "merge" -> copyEntity(source, destination, overwrite = true, skipExisting = false)
-            "overwrite" -> {
-                if (destination.exists()) {
-                    deleteRecursively(destination)
-                }
-                copyEntity(source, destination, overwrite = true, skipExisting = false)
-            }
-            "skip-existing" -> copyEntity(source, destination, overwrite = false, skipExisting = true)
-            else -> throw TermuxAgentException(
-                AgentErrorCode.VALIDATION,
-                "Unsupported import mode: $mode",
+
+            copyEntity(
+                source = source,
+                destination = stagedEntity,
+                destinationRoot = stagingRoot,
+                overwrite = true,
+                skipExisting = false,
             )
+
+            when (mode) {
+                "file" -> replacePathAtomically(destination, stagedEntity)
+                "folder" -> replacePathAtomically(destination, stagedEntity)
+                "merge" -> {
+                    if (!destination.exists()) {
+                        replacePathAtomically(destination, stagedEntity)
+                    } else {
+                        copyEntity(
+                            source = stagedEntity,
+                            destination = destination,
+                            destinationRoot = destinationRoot,
+                            overwrite = true,
+                            skipExisting = false,
+                        )
+                    }
+                }
+                "overwrite" -> replacePathAtomically(destination, stagedEntity)
+                "skip-existing" -> {
+                    if (!destination.exists()) {
+                        replacePathAtomically(destination, stagedEntity)
+                    } else {
+                        copyEntity(
+                            source = stagedEntity,
+                            destination = destination,
+                            destinationRoot = destinationRoot,
+                            overwrite = false,
+                            skipExisting = true,
+                        )
+                    }
+                }
+                else -> Unit
+            }
+        } finally {
+            deleteRecursively(stagingRoot)
         }
 
         return destination.absolutePath
@@ -172,13 +208,22 @@ class WorkspaceRepository(private val filesDir: File) {
             )
         }
 
-        sourceProject.listFiles()?.forEach { child ->
-            copyEntity(
-                child,
-                File(destination, child.name),
-                overwrite = true,
-                skipExisting = false,
-            )
+        val stagingParent = destination.parentFile ?: destination
+        val stagingRoot = createStagingDir(stagingParent, "export")
+
+        try {
+            sourceProject.listFiles()?.forEach { child ->
+                copyEntity(
+                    child,
+                    File(stagingRoot, child.name),
+                    stagingRoot,
+                    overwrite = true,
+                    skipExisting = false,
+                )
+            }
+            replacePathAtomically(destination, stagingRoot)
+        } finally {
+            deleteRecursively(stagingRoot)
         }
 
         return "file://${destination.absolutePath}"
@@ -286,10 +331,17 @@ class WorkspaceRepository(private val filesDir: File) {
             )
         }
 
-        val file = if (raw.startsWith("file://")) {
-            File(URI(raw))
-        } else {
-            File(raw)
+        val file = try {
+            if (raw.startsWith("file://")) {
+                File(URI(raw))
+            } else {
+                File(raw)
+            }
+        } catch (_: IllegalArgumentException) {
+            throw TermuxAgentException(
+                AgentErrorCode.VALIDATION,
+                "Invalid file URI or path: $raw",
+            )
         }
 
         if (!file.isAbsolute) {
@@ -299,10 +351,22 @@ class WorkspaceRepository(private val filesDir: File) {
             )
         }
 
-        return file
+        return file.toPath().normalize().toFile().absoluteFile
     }
 
-    private fun copyEntity(source: File, destination: File, overwrite: Boolean, skipExisting: Boolean) {
+    private fun copyEntity(
+        source: File,
+        destination: File,
+        destinationRoot: File,
+        overwrite: Boolean,
+        skipExisting: Boolean,
+    ) {
+        requireNoSymlink(source, "source")
+        requireWithinDestinationRoot(destination, destinationRoot)
+        if (destination.exists()) {
+            requireNoSymlink(destination, "destination")
+        }
+
         if (source.isDirectory) {
             if (destination.exists() && destination.isFile) {
                 if (skipExisting) return
@@ -323,7 +387,13 @@ class WorkspaceRepository(private val filesDir: File) {
             }
 
             source.listFiles()?.forEach { child ->
-                copyEntity(child, File(destination, child.name), overwrite, skipExisting)
+                copyEntity(
+                    source = child,
+                    destination = File(destination, child.name),
+                    destinationRoot = destinationRoot,
+                    overwrite = overwrite,
+                    skipExisting = skipExisting,
+                )
             }
             return
         }
@@ -361,6 +431,112 @@ class WorkspaceRepository(private val filesDir: File) {
             AgentErrorCode.IO,
             "Unsupported source type for copy: ${source.absolutePath}",
         )
+    }
+
+    private fun createStagingDir(parent: File, prefix: String): File {
+        if (!parent.exists() && !parent.mkdirs()) {
+            throw TermuxAgentException(
+                AgentErrorCode.IO,
+                "Failed to create staging parent directory: ${parent.absolutePath}",
+            )
+        }
+        val staging = File(parent, ".$prefix-${UUID.randomUUID()}.staging")
+        if (!staging.mkdirs()) {
+            throw TermuxAgentException(
+                AgentErrorCode.IO,
+                "Failed to create staging directory: ${staging.absolutePath}",
+            )
+        }
+        return staging
+    }
+
+    private fun replacePathAtomically(target: File, replacement: File) {
+        if (!replacement.exists()) {
+            throw TermuxAgentException(
+                AgentErrorCode.IO,
+                "Replacement path does not exist: ${replacement.absolutePath}",
+            )
+        }
+
+        val parent = target.parentFile
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw TermuxAgentException(
+                AgentErrorCode.IO,
+                "Failed to create target parent directory: ${parent.absolutePath}",
+            )
+        }
+
+        val backup = if (target.exists()) {
+            File(target.parentFile, ".backup-${target.name}-${UUID.randomUUID()}")
+        } else {
+            null
+        }
+
+        try {
+            if (backup != null && !target.renameTo(backup)) {
+                throw TermuxAgentException(
+                    AgentErrorCode.IO,
+                    "Failed to prepare backup for target: ${target.absolutePath}",
+                )
+            }
+            if (!replacement.renameTo(target)) {
+                if (backup != null && !backup.renameTo(target)) {
+                    throw TermuxAgentException(
+                        AgentErrorCode.IO,
+                        "Failed to commit replacement and restore backup for ${target.absolutePath}",
+                    )
+                }
+                throw TermuxAgentException(
+                    AgentErrorCode.IO,
+                    "Failed to replace target path: ${target.absolutePath}",
+                )
+            }
+            if (backup != null) {
+                deleteRecursively(backup)
+            }
+        } catch (error: TermuxAgentException) {
+            if (!target.exists() && backup != null && backup.exists()) {
+                backup.renameTo(target)
+            }
+            throw error
+        }
+    }
+
+    private fun requireNoSymlink(path: File, label: String) {
+        if (Files.isSymbolicLink(path.toPath())) {
+            throw TermuxAgentException(
+                AgentErrorCode.VALIDATION,
+                "Symbolic links are not supported for $label path: ${path.absolutePath}",
+            )
+        }
+    }
+
+    private fun requireWithinDestinationRoot(path: File, root: File) {
+        val canonicalRoot = canonical(root)
+        val canonicalPath = canonical(path)
+
+        val rootPrefix = if (canonicalRoot.endsWith(File.separator)) {
+            canonicalRoot
+        } else {
+            "$canonicalRoot${File.separator}"
+        }
+        if (canonicalPath != canonicalRoot && !canonicalPath.startsWith(rootPrefix)) {
+            throw TermuxAgentException(
+                AgentErrorCode.VALIDATION,
+                "Path traversal detected outside destination root: $canonicalPath",
+            )
+        }
+    }
+
+    private fun canonical(path: File): String {
+        return try {
+            path.canonicalPath
+        } catch (_: IOException) {
+            throw TermuxAgentException(
+                AgentErrorCode.IO,
+                "Failed to resolve canonical path: ${path.absolutePath}",
+            )
+        }
     }
 
     private fun deleteRecursively(file: File) {

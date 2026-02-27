@@ -2,19 +2,19 @@
 
 ## 1) Scope & Decisions Lock
 ### Locked Decisions
-- [ ] Lock custom package/prefix model for the target Flutter app (no direct `com.termux` prefix reuse).
-- [ ] Lock federated Flutter plugin architecture (Android host implementation + Dart API surface).
-- [ ] Lock offline-first runtime model with bundled bootstrap/toolchain artifacts only (no runtime download path).
-- [ ] Lock multiple named workspaces model.
-- [ ] Lock default app-internal storage model for workspace/runtime data.
-- [ ] Lock explicit export flow for moving sources out of app-internal storage.
-- [ ] Lock phased rollout: `1) backend+file transfer`, `2) LSP+run/build`, `3) custom task view`.
+- [x] Lock custom package/prefix model for the target Flutter app (no direct `com.termux` prefix reuse).
+- [x] Lock federated Flutter plugin architecture (Android host implementation + Dart API surface).
+- [x] Lock offline-first runtime model with bundled bootstrap/toolchain artifacts only (no runtime download path).
+- [x] Lock multiple named workspaces model.
+- [x] Lock default app-internal storage model for workspace/runtime data.
+- [x] Lock explicit export flow for moving sources out of app-internal storage.
+- [x] Lock phased rollout: `1) backend+file transfer`, `2) LSP+run/build`, `3) custom task view`.
 
 ### Out of Scope For Now
-- [ ] Keep full terminal UI embedding out of phase 1.
-- [ ] Keep runtime network bootstrap/toolchain download out of scope.
-- [ ] Keep external storage in-place editing out of scope.
-- [ ] Keep multi-process distributed backend architecture out of scope.
+- [x] Keep full terminal UI embedding out of phase 1.
+- [x] Keep runtime network bootstrap/toolchain download out of scope.
+- [x] Keep external storage in-place editing out of scope.
+- [x] Keep multi-process distributed backend architecture out of scope.
 
 ### Definition of Done
 - [ ] Define phase 1 DoD checklist (artifacts, acceptance criteria, failure handling).
@@ -38,8 +38,8 @@
 
 ## 3) Foundation TODOs (Tiny-to-Big)
 ### 3.1 Prefix/Bootstrap
-- [ ] Define custom package/prefix constants for target Flutter app.
-- [ ] Define runtime root layout under app internal files directory.
+- [x] Define custom package/prefix constants for target Flutter app.
+- [x] Define runtime root layout under app internal files directory.
 - [ ] Create bootstrap artifact matrix checklist per ABI (`arm64-v8a`, `armeabi-v7a`, `x86_64`, `x86` if needed).
 - [ ] Define checksum verification checklist for bundled bootstrap archives.
 - [ ] Define staging extraction checklist (extract to staging path before activation).
@@ -49,11 +49,11 @@
 - [ ] Define bootstrap versioning and upgrade compatibility checklist.
 
 ### 3.2 Workspace Layout
-- [ ] Define immutable shared runtime base directory checklist.
-- [ ] Define per-workspace writable directory checklist (`home`, `project`, `tmp`, metadata).
-- [ ] Define workspace metadata schema checklist (`id`, `name`, `createdAt`, `lastUsedAt`, `state`, `runtimeVersion`).
+- [x] Define immutable shared runtime base directory checklist.
+- [x] Define per-workspace writable directory checklist (`home`, `project`, `tmp`, metadata).
+- [x] Define workspace metadata schema checklist (`id`, `name`, `createdAt`, `lastUsedAt`, `state`, `runtimeVersion`).
 - [ ] Define workspace state machine checklist (`creating`, `ready`, `deleting`, `failed`).
-- [ ] Define workspace naming/slug collision checklist.
+- [x] Define workspace naming/slug collision checklist.
 - [ ] Define lock/serialization checklist for concurrent create/delete/import/export operations.
 - [ ] Define stale workspace cleanup checklist on startup.
 
@@ -69,8 +69,8 @@
 - [ ] Define optional guarded `.env` debug dump checklist.
 
 ### 3.4 Session Runtime
-- [ ] Add session ID generation checklist.
-- [ ] Add in-memory `SessionRegistry` checklist.
+- [x] Add session ID generation checklist.
+- [x] Add in-memory `SessionRegistry` checklist.
 - [ ] Add persistent session snapshot policy checklist (if resumption required).
 - [ ] Add process spawn checklist for `shell` sessions (non-PTY).
 - [ ] Add process spawn checklist for `lsp` sessions (non-PTY stdio JSON-RPC).
@@ -114,32 +114,32 @@
 - [ ] Define `BootstrapInstaller` responsibilities and method signatures.
 - [ ] Define `EnvBuilder` responsibilities and method signatures.
 - [ ] Define `SessionHost` responsibilities and method signatures.
-- [ ] Define `SessionRegistry` responsibilities and method signatures.
+- [x] Define `SessionRegistry` responsibilities and method signatures.
 
 ### 4.5 Cross-Cutting Contract Tasks
 - [x] Define Dart typed request/response models checklist for all methods.
-- [ ] Define stable field naming/versioning checklist for payload schemas.
+- [x] Define stable field naming/versioning checklist for payload schemas.
 - [x] Define error taxonomy checklist (`validation`, `io`, `process`, `workspace`, `bootstrap`, `permission`).
-- [ ] Define channel lifecycle checklist (subscribe/unsubscribe, plugin detach/reattach).
+- [x] Define channel lifecycle checklist (subscribe/unsubscribe, plugin detach/reattach).
 - [ ] Define app-restart session resume behavior checklist.
 
 ## 5) File Transfer TODOs
-- [ ] Define import modes checklist (`file`, `folder`, merge, overwrite, skip-existing).
-- [ ] Define copy-in workflow checklist from external URI to internal workspace path.
+- [x] Define import modes checklist (`file`, `folder`, merge, overwrite, skip-existing).
+- [x] Define copy-in workflow checklist from external URI to internal workspace path.
 - [ ] Define content URI permission lifecycle checklist.
 - [ ] Define large transfer progress event checklist.
-- [ ] Define export workflow checklist from internal workspace to external destination.
-- [ ] Define collision policy checklist for import/export targets.
-- [ ] Define path traversal protection checklist.
-- [ ] Define unsafe symlink handling checklist.
-- [ ] Define import/export rollback behavior checklist on partial failure.
+- [x] Define export workflow checklist from internal workspace to external destination.
+- [x] Define collision policy checklist for import/export targets.
+- [x] Define path traversal protection checklist.
+- [x] Define unsafe symlink handling checklist.
+- [x] Define import/export rollback behavior checklist on partial failure.
 
 ## 6) Milestone TODOs
 ### Phase 1: Backend + File Transfer
 - [ ] Runtime bootstrap install/delete/recreate checklist.
-- [ ] Workspace CRUD checklist.
-- [ ] Import/export checklist.
-- [ ] Session framework checklist (without LSP protocol handling).
+- [x] Workspace CRUD checklist.
+- [x] Import/export checklist.
+- [x] Session framework checklist (without LSP protocol handling).
 - [ ] End-to-end smoke checklist with one command.
 
 ### Phase 2: LSP + Run/Build
@@ -161,11 +161,11 @@
 - [ ] Offline cold-start workspace creation test checklist.
 - [ ] Concurrent workspace operation test checklist.
 - [ ] Import folder and open internal copy test checklist.
-- [ ] Export snapshot test checklist.
+- [x] Export snapshot test checklist.
 - [ ] stdout/stderr ordering test checklist.
 - [ ] LSP framing validity test checklist.
-- [ ] Delete workspace with active sessions test checklist.
-- [ ] Restart recovery test checklist.
+- [x] Delete workspace with active sessions test checklist.
+- [x] Restart recovery test checklist.
 - [ ] ABI mismatch/bootstrap corruption failure test checklist.
 - [ ] Low-storage failure and rollback test checklist.
 
@@ -181,5 +181,5 @@
 - [ ] Confirm guide file to edit is [flutter-termux-agent-guide.md](/home/esil/Documents/workspace/termux-app/flutter-termux-agent-guide.md).
 - [ ] Confirm result format remains checkbox-first task tracker with minimal prose.
 - [ ] Confirm all tasks start unchecked (`[ ]`) and can later include owner/date metadata.
-- [ ] Confirm internal storage remains default workspace location.
-- [ ] Confirm external storage usage remains import/export only.
+- [x] Confirm internal storage remains default workspace location.
+- [x] Confirm external storage usage remains import/export only.

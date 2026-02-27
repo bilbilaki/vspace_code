@@ -17,27 +17,46 @@ class MainActivity : FlutterActivity() {
         private const val EVENT_CHANNEL = "vspace.termux_agent/session_events"
     }
 
+    private var methodChannel: MethodChannel? = null
+    private var eventChannel: EventChannel? = null
+    private var eventBridge: TermuxAgentEventBridge? = null
+    private var sessionEngine: StubSessionEngine? = null
+
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
         val runtimeRepository = RuntimeRepository(filesDir)
         val workspaceRepository = WorkspaceRepository(filesDir)
         val sessionRegistry = SessionRegistry()
-        val eventBridge = TermuxAgentEventBridge()
-        val stubSessionEngine = StubSessionEngine(sessionRegistry, eventBridge)
+        val bridge = TermuxAgentEventBridge()
+        val stubSessionEngine = StubSessionEngine(sessionRegistry, bridge)
+        val handler = TermuxAgentMethodHandler(
+            runtimeRepository = runtimeRepository,
+            workspaceRepository = workspaceRepository,
+            sessionRegistry = sessionRegistry,
+            sessionEngine = stubSessionEngine,
+            eventBridge = bridge,
+        )
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL)
-            .setMethodCallHandler(
-                TermuxAgentMethodHandler(
-                    runtimeRepository = runtimeRepository,
-                    workspaceRepository = workspaceRepository,
-                    sessionRegistry = sessionRegistry,
-                    sessionEngine = stubSessionEngine,
-                    eventBridge = eventBridge,
-                )
-            )
+        methodChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, METHOD_CHANNEL).also {
+            it.setMethodCallHandler(handler)
+        }
+        eventChannel = EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).also {
+            it.setStreamHandler(bridge)
+        }
+        eventBridge = bridge
+        sessionEngine = stubSessionEngine
+    }
 
-        EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL)
-            .setStreamHandler(eventBridge)
+    override fun cleanUpFlutterEngine(flutterEngine: FlutterEngine) {
+        methodChannel?.setMethodCallHandler(null)
+        eventChannel?.setStreamHandler(null)
+        eventBridge?.clearAll()
+        sessionEngine?.shutdown()
+        methodChannel = null
+        eventChannel = null
+        eventBridge = null
+        sessionEngine = null
+        super.cleanUpFlutterEngine(flutterEngine)
     }
 }

@@ -94,6 +94,10 @@ class StubSessionEngine(
         }
     }
 
+    fun shutdown() {
+        executor.shutdownNow()
+    }
+
     private fun emitState(sessionId: String, state: String) {
         val payload = baseEvent(sessionId, "state").toMutableMap()
         payload["state"] = state

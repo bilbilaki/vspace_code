@@ -36,6 +36,10 @@ open class TermuxAgentEventBridge : EventChannel.StreamHandler {
         sinks.remove(sessionId)
     }
 
+    fun clearAll() {
+        sinks.clear()
+    }
+
     @Synchronized
     open fun emit(sessionId: String, payload: Map<String, Any?>) {
         sinks[sessionId]?.success(payload)
